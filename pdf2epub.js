@@ -21,7 +21,8 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import JSZip from 'jszip';
+import { deflateRawSync } from 'node:zlib';
+import { fileURLToPath } from 'node:url';
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 
 // ---------------------------------------------------------------------------
@@ -405,23 +406,88 @@ p { margin: 0 0 0.8em; text-align: justify; text-indent: 0; }
 .cover img { max-width: 100%; max-height: 100%; }
 `;
 
+// Minimal ZIP writer (stdlib only) — enough for EPUB: no zip64, no data
+// descriptors. CRC32 is implemented here so it works on Node 18+ (zlib.crc32
+// is only available on newer Node).
+const CRC_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    t[n] = c >>> 0;
+  }
+  return t;
+})();
+
+function crc32(buf) {
+  let c = 0xffffffff;
+  for (let i = 0; i < buf.length; i++) c = CRC_TABLE[(c ^ buf[i]) & 0xff] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+}
+
+// entries: [{ name, data: string|Buffer, store?: bool }]. First EPUB entry
+// ("mimetype") must be stored uncompressed; the rest are deflated.
+export function buildZip(entries) {
+  const local = [];
+  const central = [];
+  let offset = 0;
+  for (const e of entries) {
+    const name = Buffer.from(e.name, 'utf8');
+    const raw = Buffer.isBuffer(e.data) ? e.data : Buffer.from(e.data, 'utf8');
+    const crc = crc32(raw);
+    const method = e.store ? 0 : 8;
+    const body = e.store ? raw : deflateRawSync(raw, { level: 9 });
+
+    const lh = Buffer.alloc(30);
+    lh.writeUInt32LE(0x04034b50, 0);
+    lh.writeUInt16LE(20, 4);           // version needed
+    lh.writeUInt16LE(method, 8);
+    lh.writeUInt32LE(crc, 14);
+    lh.writeUInt32LE(body.length, 18); // compressed size
+    lh.writeUInt32LE(raw.length, 22);  // uncompressed size
+    lh.writeUInt16LE(name.length, 26);
+    local.push(lh, name, body);
+
+    const cd = Buffer.alloc(46);
+    cd.writeUInt32LE(0x02014b50, 0);
+    cd.writeUInt16LE(20, 4);           // version made by
+    cd.writeUInt16LE(20, 6);           // version needed
+    cd.writeUInt16LE(method, 10);
+    cd.writeUInt32LE(crc, 16);
+    cd.writeUInt32LE(body.length, 20);
+    cd.writeUInt32LE(raw.length, 24);
+    cd.writeUInt16LE(name.length, 28);
+    cd.writeUInt32LE(offset, 42);      // local header offset
+    central.push(cd, name);
+
+    offset += lh.length + name.length + body.length;
+  }
+  const centralBuf = Buffer.concat(central);
+  const eocd = Buffer.alloc(22);
+  eocd.writeUInt32LE(0x06054b50, 0);
+  eocd.writeUInt16LE(entries.length, 8);
+  eocd.writeUInt16LE(entries.length, 10);
+  eocd.writeUInt32LE(centralBuf.length, 12);
+  eocd.writeUInt32LE(offset, 16);
+  return Buffer.concat([...local, centralBuf, eocd]);
+}
+
 async function writeEpub(outFile, book) {
-  const zip = new JSZip();
   const uuid = randomUUID();
   const modified = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
+  const entries = [];
 
   // mimetype must be first and uncompressed.
-  zip.file('mimetype', 'application/epub+zip', { compression: 'STORE' });
-  zip.file('META-INF/container.xml', `<?xml version="1.0" encoding="UTF-8"?>
+  entries.push({ name: 'mimetype', data: 'application/epub+zip', store: true });
+  entries.push({ name: 'META-INF/container.xml', data: `<?xml version="1.0" encoding="UTF-8"?>
 <container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
   <rootfiles>
     <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
   </rootfiles>
 </container>
-`);
+` });
 
-  const oebps = zip.folder('OEBPS');
-  oebps.file('style.css', STYLE_CSS);
+  entries.push({ name: 'OEBPS/style.css', data: STYLE_CSS });
 
   const manifest = [];
   const spine = [];
@@ -433,15 +499,15 @@ async function writeEpub(outFile, book) {
     const ext = path.extname(book.cover.file).toLowerCase();
     const mime = ext === '.png' ? 'image/png' : 'image/jpeg';
     const imgName = `cover${ext === '.png' ? '.png' : '.jpg'}`;
-    oebps.file(imgName, book.cover.data);
+    entries.push({ name: `OEBPS/${imgName}`, data: book.cover.data });
     manifest.push(`<item id="cover-image" href="${imgName}" media-type="${mime}" properties="cover-image"/>`);
-    oebps.file('cover.xhtml', `<?xml version="1.0" encoding="UTF-8"?>
+    entries.push({ name: 'OEBPS/cover.xhtml', data: `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="${esc(book.lang)}">
 <head><meta charset="utf-8"/><title>Cover</title><link rel="stylesheet" type="text/css" href="style.css"/></head>
 <body class="cover"><img src="${imgName}" alt="Cover"/></body>
 </html>
-`);
+` });
     manifest.push(`<item id="cover" href="cover.xhtml" media-type="application/xhtml+xml"/>`);
     spine.push(`<itemref idref="cover" linear="no"/>`);
     coverMeta = `<meta name="cover" content="cover-image"/>`;
@@ -450,13 +516,13 @@ async function writeEpub(outFile, book) {
   book.chapters.forEach((ch, i) => {
     const id = `ch${String(i + 1).padStart(3, '0')}`;
     const href = `${id}.xhtml`;
-    oebps.file(href, chapterXhtml(ch, book.lang));
+    entries.push({ name: `OEBPS/${href}`, data: chapterXhtml(ch, book.lang) });
     manifest.push(`<item id="${id}" href="${href}" media-type="application/xhtml+xml"/>`);
     spine.push(`<itemref idref="${id}"/>`);
     navItems.push({ id, href, title: ch.title });
   });
 
-  oebps.file('nav.xhtml', `<?xml version="1.0" encoding="UTF-8"?>
+  entries.push({ name: 'OEBPS/nav.xhtml', data: `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" xml:lang="${esc(book.lang)}">
 <head><meta charset="utf-8"/><title>Table of Contents</title><link rel="stylesheet" type="text/css" href="style.css"/></head>
@@ -469,10 +535,10 @@ ${navItems.map((n) => `    <li><a href="${n.href}">${esc(n.title)}</a></li>`).jo
 </nav>
 </body>
 </html>
-`);
+` });
 
   // NCX for older readers (EPUB 2 compatibility).
-  oebps.file('toc.ncx', `<?xml version="1.0" encoding="UTF-8"?>
+  entries.push({ name: 'OEBPS/toc.ncx', data: `<?xml version="1.0" encoding="UTF-8"?>
 <ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">
   <head>
     <meta name="dtb:uid" content="urn:uuid:${uuid}"/>
@@ -485,9 +551,9 @@ ${navItems.map((n) => `    <li><a href="${n.href}">${esc(n.title)}</a></li>`).jo
 ${navItems.map((n, i) => `    <navPoint id="np${i + 1}" playOrder="${i + 1}"><navLabel><text>${esc(n.title)}</text></navLabel><content src="${n.href}"/></navPoint>`).join('\n')}
   </navMap>
 </ncx>
-`);
+` });
 
-  oebps.file('content.opf', `<?xml version="1.0" encoding="UTF-8"?>
+  entries.push({ name: 'OEBPS/content.opf', data: `<?xml version="1.0" encoding="UTF-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid" xml:lang="${esc(book.lang)}">
   <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
     <dc:identifier id="bookid">urn:uuid:${uuid}</dc:identifier>
@@ -507,13 +573,9 @@ ${navItems.map((n, i) => `    <navPoint id="np${i + 1}" playOrder="${i + 1}"><na
     ${spine.join('\n    ')}
   </spine>
 </package>
-`);
+` });
 
-  const buf = await zip.generateAsync({
-    type: 'nodebuffer',
-    compression: 'DEFLATE',
-    compressionOptions: { level: 9 },
-  });
+  const buf = buildZip(entries);
   await fs.writeFile(outFile, buf);
   return buf.length;
 }
@@ -575,8 +637,10 @@ async function main() {
   console.error(`Output:    ${output} (${(bytes / 1024).toFixed(1)} KB)`);
 }
 
-main().catch((e) => {
-  console.error(`Error: ${e.message}`);
-  if (process.env.DEBUG) console.error(e.stack);
-  process.exit(1);
-});
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  main().catch((e) => {
+    console.error(`Error: ${e.message}`);
+    if (process.env.DEBUG) console.error(e.stack);
+    process.exit(1);
+  });
+}
