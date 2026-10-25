@@ -1,6 +1,6 @@
 {
   "name": "pdf2epub",
-  "version": "0.1.11",
+  "version": "0.1.14",
   "description": "Convert PDF files to EPUB ebooks",
   "type": "module",
   "main": "./pdf2epub.js",

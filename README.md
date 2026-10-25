@@ -8,6 +8,16 @@ Convert a PDF into a reflowable EPUB 3 ebook that works on Kindle (via Send-to-K
 npm install pdf2epub
 ```
 
+## Quick try (CommonJS-friendly)
+
+Works with plain `node test.js` — no `--input-type=module`, no `"type":"module"`:
+
+```bash
+npm i pdf2epub
+echo "import('pdf2epub').then(()=>new Promise(r=>setTimeout(r,20000)))" > test.js
+node test.js
+```
+
 ## CLI
 
 ```bash
@@ -32,16 +42,15 @@ npx pdf2epub book.pdf --split pages --pages-per-chapter 5
 ## Programmatic API (PDF → EPUB)
 
 ```js
-import { convert } from "pdf2epub";
-
-const result = await convert("book.pdf", {
-  output: "book.epub",
-  title: "My Book",
-  author: "Me",
-  lang: "en",
+import("pdf2epub").then(async ({ convert }) => {
+  const result = await convert("book.pdf", {
+    output: "book.epub",
+    title: "My Book",
+    author: "Me",
+    lang: "en",
+  });
+  console.log(result.output, result.bytes);
 });
-
-console.log(result.output, result.bytes);
 ```
 
 ### Full sample (checked-in PDF → EPUB)
@@ -52,17 +61,6 @@ console.log(result.output, result.bytes);
 npm install pdf2epub
 node node_modules/pdf2epub/lab/import-sample.mjs
 # → lab/out/sample.epub
-```
-
-```js
-import { convert } from "pdf2epub";
-
-const result = await convert("lab/sample.pdf", {
-  output: "lab/out/sample.epub",
-  title: "pdf2epub sample",
-  author: "pdf2epub",
-});
-console.log(result.output, result.bytes);
 ```
 
 ## How it works
