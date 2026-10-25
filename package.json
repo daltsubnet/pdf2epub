@@ -1,0 +1,26 @@
+{
+  "name": "pdf2epub",
+  "version": "0.1.5",
+  "description": "Convert PDF files to EPUB ebooks",
+  "type": "module",
+  "bin": {
+    "pdf2epub": "./pdf2epub.js"
+  },
+  "scripts": {
+    "start": "node pdf2epub.js"
+  },
+  "author": "dalt4sec",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/daltsubnet/pdf2epub.git"
+  },
+  "bugs": {
+    "url": "https://github.com/daltsubnet/pdf2epub/issues"
+  },
+  "homepage": "https://github.com/daltsubnet/pdf2epub#readme",
+  "dependencies": {
+    "jszip": "^3.10.1",
+    "pdfjs-dist": "^4.10.38"
+  }
+}
