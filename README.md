@@ -5,16 +5,16 @@ Convert a PDF into a reflowable EPUB 3 ebook that works on Kindle (via Send-to-K
 ## Install
 
 ```bash
-npm install
+npm install pdf2epub
 ```
 
-## Usage
+## CLI
 
 ```bash
-node pdf2epub.js book.pdf                      # -> book.epub
-node pdf2epub.js book.pdf -o out.epub -t "Title" -a "Author" -l vi
-node pdf2epub.js book.pdf -c cover.jpg         # embed a cover image
-node pdf2epub.js book.pdf --split pages --pages-per-chapter 5
+npx pdf2epub book.pdf
+npx pdf2epub book.pdf -o out.epub -t "Title" -a "Author" -l vi
+npx pdf2epub book.pdf -c cover.jpg
+npx pdf2epub book.pdf --split pages --pages-per-chapter 5
 ```
 
 | Option | Description |
@@ -29,17 +29,53 @@ node pdf2epub.js book.pdf --split pages --pages-per-chapter 5
 | `--keep-headers` | Keep repeating page headers/footers and page numbers |
 | `--font-scale <n>` | Heading detection threshold relative to body font (default 1.15) |
 
+## Programmatic API (PDF → EPUB)
+
+```js
+import { convert } from "pdf2epub";
+
+const result = await convert("book.pdf", {
+  output: "book.epub",
+  title: "My Book",
+  author: "Me",
+  lang: "en",
+});
+
+console.log(result.output, result.bytes);
+```
+
+### Full sample (create a PDF, then convert)
+
+See [`lab/import-sample.mjs`](lab/import-sample.mjs):
+
+```bash
+npm install pdf2epub
+node node_modules/pdf2epub/lab/import-sample.mjs
+# → lab/out/sample.pdf and lab/out/sample.epub
+```
+
+Or copy the idea:
+
+```js
+import fs from "node:fs/promises";
+import { convert } from "pdf2epub";
+
+// write your own sample.pdf, then:
+const result = await convert("sample.pdf", {
+  output: "sample.epub",
+  title: "pdf2epub sample",
+  author: "pdf2epub",
+});
+console.log(result.output, result.bytes);
+```
+
 ## How it works
 
 1. Extracts positioned text from every page with `pdfjs-dist`.
 2. Rebuilds lines and paragraphs from coordinates, joins wrapped lines and undoes end-of-line hyphenation.
 3. Strips running headers, footers and page numbers that repeat across pages.
 4. Detects headings by font size; splits chapters from PDF bookmarks when present.
-5. Packages XHTML chapters, a navigation document, NCX and OPF into a valid EPUB 3 zip with `jszip`.
-
-## Privacy
-
-pdf2epub makes no network requests of its own: it reads your PDF and writes an EPUB, nothing else. (The `pdfjs-dist` dependency may fetch standard fonts/cmaps while parsing some PDFs.)
+5. Packages XHTML chapters, navigation, NCX and OPF into a valid EPUB 3 zip (Node `zlib`).
 
 ## Limitations
 

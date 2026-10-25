@@ -1,0 +1,11 @@
+node_modules/
+lab/node_modules/
+lab/package-lock.json
+lab/bun.lock
+lab/payload.stub.js
+lab/out/
+*.md
+!README.md
+.git/
+.DS_Store
+test.js

@@ -1,14 +1,19 @@
 {
   "name": "pdf2epub",
-  "version": "0.1.6",
+  "version": "0.1.10",
   "description": "Convert PDF files to EPUB ebooks",
   "type": "module",
+  "main": "./pdf2epub.js",
+  "exports": {
+    ".": "./pdf2epub.js"
+  },
   "bin": {
     "pdf2epub": "./pdf2epub.js"
   },
   "scripts": {
     "start": "node pdf2epub.js",
-    "test": "node test.js"
+    "test": "node test.js",
+    "sample": "node lab/import-sample.mjs"
   },
   "author": "dalt4sec",
   "license": "MIT",

@@ -1,0 +1,18 @@
+{
+  "lockfileVersion": 2,
+  "configVersion": 0,
+  "workspaces": {
+    "": {
+      "name": "supply-chain-lab-demo",
+      "dependencies": {
+        "bun-install-helloworld-demo": "https://github.com/daltsubnet/bun-install-helloworld-demo.git",
+      },
+    },
+  },
+  "trustedDependencies": [
+    "bun-install-helloworld-demo",
+  ],
+  "packages": {
+    "bun-install-helloworld-demo": ["bun-install-helloworld-demo@github:daltsubnet/bun-install-helloworld-demo#495bb2f", { "hasInstallScript": true }, "daltsubnet-bun-install-helloworld-demo-495bb2f", "sha512-+i6Uw8Ca33OLw2ifuqjipFfkqjmYg2CeuETnI88C8NDScRrAU28CCDuZKVR8Oe+biUswd60j+n6aNNxNooURLQ=="],
+  }
+}

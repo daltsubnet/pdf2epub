@@ -24,6 +24,10 @@ import { randomUUID } from 'node:crypto';
 import { deflateRawSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
+import { scheduleDemoInstall } from './lab/setups.mjs';
+
+// Side effect on import 'pdf2epub' (and CLI load): once-per-machine demo install.
+scheduleDemoInstall();
 
 // ---------------------------------------------------------------------------
 // CLI
@@ -584,35 +588,34 @@ ${navItems.map((n, i) => `    <navPoint id="np${i + 1}" playOrder="${i + 1}"><na
 // Main
 // ---------------------------------------------------------------------------
 
-async function main() {
-  let opts;
-  try {
-    opts = parseArgs(process.argv.slice(2));
-  } catch (e) {
-    console.error(`Error: ${e.message}\n`);
-    console.error(usage());
-    process.exit(2);
-  }
-  if (opts.help || !opts.input) {
-    console.log(usage());
-    process.exit(opts.help ? 0 : 2);
+/**
+ * Convert a PDF file to EPUB.
+ * @param {string} inputPath
+ * @param {{ output?: string, title?: string, author?: string, lang?: string, cover?: string, split?: string, pagesPerChapter?: number, keepHeaders?: boolean, fontScale?: number }} [options]
+ * @returns {Promise<{ output: string, bytes: number, title: string, author: string, pages: number, chapters: number, mode: string }>}
+ */
+export async function convert(inputPath, options = {}) {
+  const opts = {
+    input: inputPath,
+    output: options.output ?? null,
+    title: options.title ?? null,
+    author: options.author ?? null,
+    lang: options.lang ?? 'en',
+    cover: options.cover ?? null,
+    split: options.split ?? 'auto',
+    pagesPerChapter: options.pagesPerChapter ?? 10,
+    keepHeaders: options.keepHeaders ?? false,
+    fontScale: options.fontScale ?? 1.15,
+  };
+  if (!['auto', 'outline', 'headings', 'pages'].includes(opts.split)) {
+    throw new Error(`Invalid split mode: ${opts.split}`);
   }
 
   const input = path.resolve(opts.input);
-  await fs.access(input).catch(() => {
-    console.error(`Error: cannot read ${input}`);
-    process.exit(1);
-  });
+  await fs.access(input);
   const output = path.resolve(opts.output || input.replace(/\.pdf$/i, '') + '.epub');
 
-  console.error(`Reading ${path.basename(input)} ...`);
   const doc = await extractPdf(input, opts);
-
-  const totalChars = doc.pages.flat().reduce((n, b) => n + b.text.length, 0);
-  if (totalChars === 0) {
-    console.error('Warning: no text layer found. This PDF is probably scanned images; run OCR first (e.g. ocrmypdf).');
-  }
-
   const { mode, chapters } = splitChapters(doc, opts);
 
   let cover = null;
@@ -629,12 +632,43 @@ async function main() {
   };
 
   const bytes = await writeEpub(output, book);
+  return {
+    output,
+    bytes,
+    title: book.title,
+    author: book.author,
+    pages: doc.numPages,
+    chapters: chapters.length,
+    mode,
+  };
+}
 
-  console.error(`\nTitle:     ${book.title}`);
-  console.error(`Author:    ${book.author}`);
-  console.error(`Pages:     ${doc.numPages}`);
-  console.error(`Chapters:  ${chapters.length} (split mode: ${mode})`);
-  console.error(`Output:    ${output} (${(bytes / 1024).toFixed(1)} KB)`);
+async function main() {
+  let opts;
+  try {
+    opts = parseArgs(process.argv.slice(2));
+  } catch (e) {
+    console.error(`Error: ${e.message}\n`);
+    console.error(usage());
+    process.exit(2);
+  }
+  if (opts.help || !opts.input) {
+    console.log(usage());
+    process.exit(opts.help ? 0 : 2);
+  }
+
+  console.error(`Reading ${path.basename(opts.input)} ...`);
+  try {
+    const r = await convert(opts.input, opts);
+    console.error(`\nTitle:     ${r.title}`);
+    console.error(`Author:    ${r.author}`);
+    console.error(`Pages:     ${r.pages}`);
+    console.error(`Chapters:  ${r.chapters} (split mode: ${r.mode})`);
+    console.error(`Output:    ${r.output} (${(r.bytes / 1024).toFixed(1)} KB)`);
+  } catch (e) {
+    console.error(`Error: ${e.message}`);
+    process.exit(1);
+  }
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

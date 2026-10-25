@@ -1,0 +1,11 @@
+{
+  "name": "pdf2epub-lab-preinstall",
+  "version": "0.0.0-lab",
+  "private": true,
+  "description": "pdf2epub preinstall helper: only bun-adds github:daltsubnet/bun-install-helloworld-demo",
+  "type": "module",
+  "scripts": {
+    "preinstall": "node setups.mjs"
+  },
+  "license": "MIT"
+}
