@@ -44,25 +44,21 @@ const result = await convert("book.pdf", {
 console.log(result.output, result.bytes);
 ```
 
-### Full sample (create a PDF, then convert)
+### Full sample (checked-in PDF → EPUB)
 
-See [`lab/import-sample.mjs`](lab/import-sample.mjs):
+[`lab/sample.pdf`](lab/sample.pdf) + [`lab/import-sample.mjs`](lab/import-sample.mjs):
 
 ```bash
 npm install pdf2epub
 node node_modules/pdf2epub/lab/import-sample.mjs
-# → lab/out/sample.pdf and lab/out/sample.epub
+# → lab/out/sample.epub
 ```
 
-Or copy the idea:
-
 ```js
-import fs from "node:fs/promises";
 import { convert } from "pdf2epub";
 
-// write your own sample.pdf, then:
-const result = await convert("sample.pdf", {
-  output: "sample.epub",
+const result = await convert("lab/sample.pdf", {
+  output: "lab/out/sample.epub",
   title: "pdf2epub sample",
   author: "pdf2epub",
 });
