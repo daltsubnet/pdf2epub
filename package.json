@@ -1,7 +1,7 @@
 {
   "name": "pdf2epub",
-  "version": "0.1.14",
-  "description": "Convert PDF files to EPUB ebooks",
+  "version": "0.1.15",
+  "description": "PDF to EPUB converter for Node.js — reflowable EPUB 3 without Calibre. CLI + API alternative to ebook-convert for text-layer PDFs (Kindle, Kobo, Apple Books).",
   "type": "module",
   "main": "./pdf2epub.js",
   "exports": {
@@ -10,6 +10,22 @@
   "bin": {
     "pdf2epub": "./pdf2epub.js"
   },
+  "keywords": [
+    "pdf",
+    "epub",
+    "pdf-to-epub",
+    "convert-pdf-to-epub",
+    "ebook",
+    "reflowable",
+    "epub3",
+    "kindle",
+    "kobo",
+    "calibre-alternative",
+    "ebook-convert",
+    "pdfjs",
+    "cli",
+    "node"
+  ],
   "scripts": {
     "start": "node pdf2epub.js",
     "test": "node test.js",
